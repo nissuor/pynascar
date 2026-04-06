@@ -95,7 +95,8 @@ class Race:
                 self.results.cautions = cached_cautions if cached_cautions is not None else pd.DataFrame()
                 self.results.lead_changes = cached_lead_changes if cached_lead_changes is not None else pd.DataFrame()
                 self.metadata.winner = self._get_winner_name()
-        
+                return
+
         print(f"Fetching Data for {self.metadata.year}-{self.metadata.series_id}-{self.metadata.race_id}")
         race_data = self.api.get_race_data(year = self.metadata.year, series_id = self.metadata.series_id,
                                            race_id=self.metadata.race_id, live=self.live)
