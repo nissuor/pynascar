@@ -149,7 +149,7 @@ class NASCARDataProcessor:
             return pd.DataFrame()
         
         lap_times = []
-        for i in data['laps']:
+        for i in data.get('laps', []):
                 driver = i.get('FullName')
                 number = i.get('Number')
                 manufacturer = i.get('Manufacturer')
@@ -208,7 +208,7 @@ class NASCARDataProcessor:
             return pd.DataFrame()
 
         events = []
-        laps = data.get('laps')
+        laps = data.get('laps', {})
         for k,v in laps.items():
                 for j in v:
                     events.append({

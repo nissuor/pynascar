@@ -38,12 +38,20 @@ class Schedule:
                 return
 
         url = f"https://cf.nascar.com/cacher/{self.year}/race_list_basic.json"
-        response = requests.get(url)
+        try:
+            response = requests.get(url, timeout=15)
+        except requests.RequestException as e:
+            warnings.warn(f"Failed to fetch race list: {e}")
+            return
         if response.status_code == 200:
             print(f"Fetching data for Year:{self.year} Series:{self.series_id}")
             data = response.json()
             # Filter the races by series ID
-            race_list = data[f'series_{self.series_id}']
+            series_key = f'series_{self.series_id}'
+            if series_key not in data:
+                warnings.warn(f"Series {self.series_id} not found in schedule data for {self.year}")
+                return
+            race_list = data[series_key]
             self.races = [race for race in race_list if race['series_id'] == self.series_id]
             self.data = pd.DataFrame(self.races)
             if "race_date" in self.data.columns:

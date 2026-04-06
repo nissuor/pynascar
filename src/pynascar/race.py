@@ -154,7 +154,9 @@ class Race:
     def _get_winner_name(self) -> str:
         """Get the name of the race winner."""
         if not self.results.results.empty:
-            return self.results.results[self.results.results['finishing_position'] == 1]['driver_name'].values[0]
+            winner_rows = self.results.results[self.results.results['finishing_position'] == 1]['driver_name'].values
+            if len(winner_rows) > 0:
+                return winner_rows[0]
         return ""
 
     def _process_weekend_run_results(self, run_data: Dict) -> None:
@@ -279,6 +281,8 @@ class Race:
             self.metadata.series_id,
             self.metadata.race_id,
         )
+        if not adv_driver_stats_data:
+            return
         self.driver_data.driver_stats_advanced = self.data_processor.process_adv_driver_data(adv_driver_stats_data)
 
         self.driver_data.driver_stats_advanced['driver_name'] = self.driver_data.driver_stats_advanced['driver_name'].map(normalize_name)
