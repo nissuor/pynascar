@@ -227,6 +227,8 @@ class NASCARDataProcessor:
     
     @staticmethod
     def process_driver_data(data: Dict[str, Any]) -> pd.DataFrame:
+        if not data:
+            return pd.DataFrame()
         drivers = data[0].get('drivers', [])
         driver_list = []
         for i in drivers:

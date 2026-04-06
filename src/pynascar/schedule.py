@@ -3,6 +3,7 @@ import warnings
 import pandas as pd
 import requests
 from .caching import load_schedule, save_schedule
+from .config import get_settings
 from .definitions import tracks_map
 
 # endpoint for race list
@@ -18,13 +19,14 @@ class Schedule:
         
     '''
     
-    def __init__(self, year, series_id, use_cache=False):
+    def __init__(self, year, series_id, use_cache=None):
         self.year = year
         self.series_id = series_id
         self.races = []
         self.data = pd.DataFrame()
-        self.use_cache = use_cache
-        self.fetch_races()      
+        # If not explicitly set, inherit from global set_options(cache_enabled=...) setting
+        self.use_cache = use_cache if use_cache is not None else get_settings().cache_enabled
+        self.fetch_races()
 
     def fetch_races(self):
         """Fetch the race list for the specified year and series ID."""
@@ -48,7 +50,7 @@ class Schedule:
                 self.data["scheduled_at"] = pd.to_datetime(
                         self.data["race_date"], errors="coerce", utc=True
                     )
-            
+
             self.data["track_type"] = self.data["track_name"].map(tracks_map).fillna("unknown")
 
             if self.use_cache:
