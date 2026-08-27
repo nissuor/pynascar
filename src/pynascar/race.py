@@ -284,8 +284,8 @@ class Race:
         if not adv_driver_stats_data:
             return
         self.driver_data.driver_stats_advanced = self.data_processor.process_adv_driver_data(adv_driver_stats_data)
-
-        self.driver_data.driver_stats_advanced['driver_name'] = self.driver_data.driver_stats_advanced['driver_name'].map(normalize_name)
+        if (not self.driver_data.driver_stats_advanced.empty) and ('driver_name' in self.driver_data.driver_stats_advanced.columns):
+            self.driver_data.driver_stats_advanced['driver_name'] = self.driver_data.driver_stats_advanced['driver_name'].map(normalize_name)
 
 
         if not self.live:
