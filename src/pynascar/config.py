@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import os
+import warnings
 
 @dataclass
 class Settings:
@@ -34,7 +35,7 @@ def set_options(
     fmt = s.df_format if df_format is None else str(df_format).lower()
     if fmt not in ("csv", "parquet"):
         fmt = "parquet"
-        raise UserWarning("Format must be csv or parquet. This will default to 'parquet'.")
+        warnings.warn("Format must be csv or parquet. This will default to 'parquet'.", UserWarning)
 
     _settings = Settings(
         cache_enabled = s.cache_enabled if cache_enabled is None else cache_enabled,
