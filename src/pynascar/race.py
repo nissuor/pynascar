@@ -95,7 +95,8 @@ class Race:
                 self.results.cautions = cached_cautions if cached_cautions is not None else pd.DataFrame()
                 self.results.lead_changes = cached_lead_changes if cached_lead_changes is not None else pd.DataFrame()
                 self.metadata.winner = self._get_winner_name()
-        
+                return
+
         print(f"Fetching Data for {self.metadata.year}-{self.metadata.series_id}-{self.metadata.race_id}")
         race_data = self.api.get_race_data(year = self.metadata.year, series_id = self.metadata.series_id,
                                            race_id=self.metadata.race_id, live=self.live)
@@ -153,7 +154,9 @@ class Race:
     def _get_winner_name(self) -> str:
         """Get the name of the race winner."""
         if not self.results.results.empty:
-            return self.results.results[self.results.results['finishing_position'] == 1]['driver_name'].values[0]
+            winner_rows = self.results.results[self.results.results['finishing_position'] == 1]['driver_name'].values
+            if len(winner_rows) > 0:
+                return winner_rows[0]
         return ""
 
     def _process_weekend_run_results(self, run_data: Dict) -> None:
@@ -278,9 +281,11 @@ class Race:
             self.metadata.series_id,
             self.metadata.race_id,
         )
+        if not adv_driver_stats_data:
+            return
         self.driver_data.driver_stats_advanced = self.data_processor.process_adv_driver_data(adv_driver_stats_data)
-
-        self.driver_data.driver_stats_advanced['driver_name'] = self.driver_data.driver_stats_advanced['driver_name'].map(normalize_name)
+        if (not self.driver_data.driver_stats_advanced.empty) and ('driver_name' in self.driver_data.driver_stats_advanced.columns):
+            self.driver_data.driver_stats_advanced['driver_name'] = self.driver_data.driver_stats_advanced['driver_name'].map(normalize_name)
 
 
         if not self.live:
