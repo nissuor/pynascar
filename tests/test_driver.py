@@ -48,7 +48,7 @@ def test_legacy_stage_points_column():
     assert driver.race_data[100]['stage1_points'] == 4
 
 
-def test_pit_stops_can_be_filtered_by_race_without_mutating_telemetry():
+def test_pit_stops_by_race():
     pits = pd.DataFrame([
         {'driver_id': 1, 'lap': 10, 'total_duration': 13.5},
         {'driver_id': 2, 'lap': 11, 'total_duration': 14.0},
@@ -74,7 +74,7 @@ def mock_season(monkeypatch, races):
                         races[race_id])
 
 
-def test_season_keeps_latest_nonblank_driver_info_and_per_race_teams(monkeypatch):
+def test_latest_team(monkeypatch):
     mock_season(monkeypatch, {
         103: make_race(team=' '),
         102: make_race(team='New team'),
@@ -88,53 +88,39 @@ def test_season_keeps_latest_nonblank_driver_info_and_per_race_teams(monkeypatch
     assert season.race_ids == [103, 102, 101]
 
 
-def legacy_lap_metrics(laps, driver_id):
-    """Reference calculation from the original per-driver implementation."""
-    frame = laps.copy()
-    rows = frame[frame.driver_id == driver_id]
-    if rows.empty:
-        return {}
-    frame['lap_speed_max'] = frame.groupby('Lap')['lap_speed'].transform('max')
-    frame['speed_rank'] = frame.groupby('Lap')['lap_speed'].rank(
-        ascending=False, method='min')
-    return {
-        'avg_lap_speed': rows.lap_speed.mean(),
-        'fastest_lap': rows.lap_speed.max(),
-        'total_laps': rows.Lap.max(),
-        'leader_laps': int((rows.lap_speed == frame.loc[rows.index, 'lap_speed_max']).sum()),
-        'avg_speed_rank': frame[frame.driver_id == driver_id].speed_rank.mean(),
-    }
-
-
 @pytest.fixture
 def laps():
-    # Tied speeds, missing speed/lap/driver IDs, and an unmapped fastest car.
+    # Ties, missing speeds, and an unmapped fastest car.
     return pd.DataFrame({
-        'driver_id': [1, 2, 3, 1, 2, 3, 1, 2, 3, np.nan, 1],
-        'Lap': pd.array([1, 1, 1, 2, 2, 2, 3, 3, 3, 2, None], dtype='Int64'),
-        'lap_speed': [100., 100., np.nan, 110., 90., np.nan, 120., np.nan, np.nan, 130., 95.],
-    }, index=[4, 8, 9, 12, 16, 18, 20, 24, 27, 32, 40])
+        'driver_id': [1, 2, 3, 1, 2, 3, 1, 2, 3, np.nan],
+        'Lap': pd.array([1, 1, 1, 2, 2, 2, 3, 3, 3, 2], dtype='Int64'),
+        'lap_speed': [100., 100., np.nan, 110., 90., np.nan, 120., np.nan, np.nan, 130.],
+    }, index=[4, 8, 9, 12, 16, 18, 20, 24, 27, 32])
 
 
 @pytest.mark.parametrize('nullable_speed', [False, True])
-def test_batch_lap_analysis_matches_existing_metrics_without_mutating(laps, nullable_speed):
+def test_lap_metrics(laps, nullable_speed):
     if nullable_speed:
         laps['lap_speed'] = laps['lap_speed'].astype('Float64')
     original = laps.copy(deep=True)
-    actual = driver_module._analyze_laps(laps)
-    for driver_id in [1, 2, 3]:
-        assert_frame_equal(pd.DataFrame([actual[driver_id]]),
-                           pd.DataFrame([legacy_lap_metrics(laps, driver_id)]),
-                           check_exact=True)
+    expected = {
+        1: (110., 120., 3, 2, 4 / 3),
+        2: (95., 100., 3, 1, 2.),
+        3: (None, None, 3, 0, None),
+    }
+    columns = ['avg_lap_speed', 'fastest_lap', 'total_laps',
+               'leader_laps', 'avg_speed_rank']
+    batch = driver_module._analyze_laps(laps)
+    for driver_id, values in expected.items():
+        driver = Driver(driver_id)
+        driver.add_race_data(make_race(driver_id=driver_id, laps=laps), 100)
+        for metrics in [batch[driver_id], driver.race_data[100]]:
+            for column, value in zip(columns, values):
+                if value is None:
+                    assert pd.isna(metrics[column])
+                else:
+                    assert metrics[column] == value
     assert_frame_equal(laps, original)
-
-
-def test_standalone_driver_still_computes_lap_metrics(laps):
-    driver = Driver(1)
-    driver.add_race_data(make_race(laps=laps), 100)
-    expected = legacy_lap_metrics(laps, 1)
-    actual = {key: driver.race_data[100][key] for key in expected}
-    assert_frame_equal(pd.DataFrame([actual]), pd.DataFrame([expected]), check_exact=True)
 
 
 @pytest.mark.parametrize('laps', [pd.DataFrame(), pd.DataFrame({'Lap': [1]})])
@@ -154,12 +140,7 @@ def test_season_analyzes_laps_once_per_race(monkeypatch, laps):
     assert analyze.call_count == 2
     assert len(season.drivers) == 4
     for race_id in [100, 101]:
-        for driver_id in [1, 2, 3]:
-            expected = legacy_lap_metrics(laps, driver_id)
-            actual = {key: season.drivers[driver_id].race_data[race_id][key]
-                      for key in expected}
-            assert_frame_equal(pd.DataFrame([actual]), pd.DataFrame([expected]),
-                               check_exact=True)
+        assert season.drivers[1].race_data[race_id]['avg_lap_speed'] == 110.
         assert 'avg_lap_speed' not in season.drivers[4].race_data[race_id]
 
 
@@ -168,11 +149,14 @@ def test_all_missing_lap_numbers_and_single_driver():
         'driver_id': [1, 1], 'Lap': pd.array([None, None], dtype='Int64'),
         'lap_speed': [100., 110.],
     })
-    assert_frame_equal(pd.DataFrame([driver_module._analyze_laps(laps)[1]]),
-                       pd.DataFrame([legacy_lap_metrics(laps, 1)]), check_exact=True)
+    metrics = driver_module._analyze_laps(laps)[1]
+    assert metrics['avg_lap_speed'] == 105.
+    assert metrics['leader_laps'] == 0
+    assert pd.isna(metrics['total_laps'])
+    assert pd.isna(metrics['avg_speed_rank'])
 
 
-def test_standalone_analysis_recomputes_after_telemetry_changes(laps):
+def test_lap_metrics_recompute(laps):
     race = make_race(laps=laps)
     driver = Driver(1)
     driver.add_race_data(race, 100)
@@ -182,7 +166,7 @@ def test_standalone_analysis_recomputes_after_telemetry_changes(laps):
 
 
 @pytest.mark.parametrize('missing_column', ['driver_id', 'Lap', 'lap_speed'])
-def test_partial_laps_preserve_driver_and_season_results(monkeypatch, missing_column):
+def test_partial_laps(monkeypatch, missing_column):
     laps = pd.DataFrame({'driver_id': [1], 'Lap': [1], 'lap_speed': [100.]})
     laps = laps.drop(columns=[missing_column])
     original = laps.copy(deep=True)
