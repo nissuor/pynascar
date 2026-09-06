@@ -29,14 +29,14 @@ def _analyze_laps(
     # Keep Series reductions for the same rounding/NA behavior as Driver's
     # original calculations. Unmapped cars still contribute to the lap ranks.
     return {
-        driver_id: {
+        driver_key: {
             'avg_lap_speed': rows['lap_speed'].mean(),
             'fastest_lap': rows['lap_speed'].max(),
             'total_laps': rows['Lap'].max(),
             'leader_laps': int(rows['leader_lap'].sum()),
             'avg_speed_rank': rows['speed_rank'].mean(),
         }
-        for driver_id, rows in laps.groupby('driver_id', sort=False)
+        for driver_key, rows in laps.groupby('driver_id', sort=False)
     }
 
 
@@ -114,7 +114,8 @@ class Driver:
                 if not stage_row.empty:
                     s = stage_row.iloc[0]
                     race_metrics[f'stage{stage_num}_position'] = s.get('finishing_position', s.get('position'))
-                    race_metrics[f'stage{stage_num}_points'] = s.get('stage_points', s.get('points'))
+                    stage_points = s.get('stage_points')
+                    race_metrics[f'stage{stage_num}_points'] = stage_points if pd.notna(stage_points) else s.get('points')
 
     def _add_driver_stats(self, race: Race, race_metrics: dict) -> None:
         """Add driver performance stats (already normalized)."""
