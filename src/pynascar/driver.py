@@ -13,11 +13,12 @@ def _analyze_laps(
     laps_df: pd.DataFrame, driver_id: Optional[int] = None,
 ) -> Dict[int, Dict]:
     """Compute the field-wide speed comparisons once for each race."""
-    if laps_df.empty or 'driver_id' not in laps_df.columns:
+    required_columns = ['driver_id', 'Lap', 'lap_speed']
+    if laps_df.empty or not set(required_columns).issubset(laps_df.columns):
         return {}
 
     # Work on a narrow copy; callers may reuse the original telemetry frame.
-    laps = laps_df[['driver_id', 'Lap', 'lap_speed']].copy()
+    laps = laps_df[required_columns].copy()
     by_lap = laps.groupby('Lap')['lap_speed']
     laps['leader_lap'] = laps['lap_speed'] == by_lap.transform('max')
     laps['speed_rank'] = by_lap.rank(ascending=False, method='min')

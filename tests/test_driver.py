@@ -179,3 +179,23 @@ def test_standalone_analysis_recomputes_after_telemetry_changes(laps):
     race.telemetry.lap_times.loc[4, 'lap_speed'] = 200.
     driver.add_race_data(race, 100)
     assert driver.race_data[100]['fastest_lap'] == 200.
+
+
+@pytest.mark.parametrize('missing_column', ['driver_id', 'Lap', 'lap_speed'])
+def test_partial_laps_preserve_driver_and_season_results(monkeypatch, missing_column):
+    laps = pd.DataFrame({'driver_id': [1], 'Lap': [1], 'lap_speed': [100.]})
+    laps = laps.drop(columns=[missing_column])
+    original = laps.copy(deep=True)
+    assert driver_module._analyze_laps(laps) == {}
+
+    race = make_race(laps=laps)
+    driver = Driver(1)
+    driver.add_race_data(race, 100)
+    assert driver.race_data[100]['finishing_position'] == 2
+    assert 'avg_lap_speed' not in driver.race_data[100]
+
+    mock_season(monkeypatch, {100: race})
+    season = DriversData.build(2025, 1)
+    assert season.get_driver(1).race_data[100]['finishing_position'] == 2
+    assert 'avg_lap_speed' not in season.get_driver(1).race_data[100]
+    assert_frame_equal(laps, original)
